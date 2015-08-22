@@ -1,5 +1,12 @@
 # Multiclass Naive Bayes SVM (NB-SVM)
-Luis Rei luis.rei@ijs.si @lmrei
+Luis Rei 
+
+luis.rei@ijs.si 
+
+@lmrei
+
+http://luisrei.com
+
 
 Learns a multiclass classifier (OneVsRest) based on word ngrams.
 
