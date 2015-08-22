@@ -1,10 +1,7 @@
 # Multiclass Naive Bayes SVM (NB-SVM)
 Luis Rei 
-
 luis.rei@ijs.si 
-
 @lmrei
-
 http://luisrei.com
 
 
