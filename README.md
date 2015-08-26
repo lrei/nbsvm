@@ -4,7 +4,6 @@ luis.rei@ijs.si
 @lmrei
 http://luisrei.com
 
-
 Learns a multiclass classifier (OneVsRest) based on word ngrams.
 
 Uses scikit learn. Reads input from TSV files. Text is expected to already be tokenized.
@@ -13,6 +12,13 @@ Original paper (binary classifier): Sida Wang and Christopher D. Manning: Baseli
 
 Based on a work at [https://github.com/mesnilgr/nbsvm](https://github.com/mesnilgr/nbsvm):
 Naive Bayes SVM by Grégoire Mesnil
+
+
+### nbsvm2.py vs nbsvm.py
+    The second version is an initial attempt to use numpy/scipy/sklearn more.
+
+### Warranty
+No guarantee that this works or is correctly implemented.
 
 ### Notes:
  - I modified the code from Mesnil for multiclass because I had neutral sentiment.
