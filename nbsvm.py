@@ -4,14 +4,14 @@
 Multiclass Naive Bayes SVM (NB-SVM)
 https://github.com/lrei/nbsvm
 
-Luis Rei <luis.rei@ijs.si> 
+Luis Rei <luis.rei@ijs.si>
 @lmrei
 http://luisrei.com
 
 Learns a multiclass (OneVsRest) classifier based on word ngrams.
 Uses scikit learn. Reads input from TSV files.
 
-Licensed under a Creative Commons Attribution-NonCommercial 4.0 
+Licensed under a Creative Commons Attribution-NonCommercial 4.0
 International License.
 
 Based on a work at https://github.com/mesnilgr/nbsvm:
@@ -19,7 +19,6 @@ Naive Bayes SVM by Grégoire Mesnil
 """
 
 import sys
-import os
 import numpy as np
 import argparse
 from collections import Counter
@@ -38,7 +37,7 @@ def tokenize(sentence, grams):
 
 
 def build_counters(filepath, grams, text_row, class_row):
-    """Reads text from a TSV file column creating an ngram count 
+    """Reads text from a TSV file column creating an ngram count
     Args:
         filepath, the tsv filepath
         grams, the n grams to use
@@ -48,9 +47,18 @@ def build_counters(filepath, grams, text_row, class_row):
     counters = {}
 
     with open(filepath) as tsvfile:
+        n = 0
         for line in tsvfile:
             row = line.split('\t')
-            c = int(row[class_row])
+            try:
+                c = int(row[class_row])
+            except:
+                print n
+                print class_row
+                print row[class_row]
+                print filepath
+                sys.exit(0)
+            n = n + 1
             # Select class counter
             if c not in counters:
                 # we don't have a counter for this class
@@ -75,11 +83,12 @@ def compute_ratios(counters, alpha=1.0):
     all_ngrams = list(all_ngrams)
     v = len(all_ngrams)  # the ngram vocabulary size
 
-    # a standard NLP dictionay (ngram -> index map) use to update the 
+    # a standard NLP dictionay (ngram -> index map) use to update the
     # one-hot vector p
     dic = dict((t, i) for i, t in enumerate(all_ngrams))
 
-    # for each class we create calculate a ratio (r_c)
+    """
+    # for each class we calculate a ratio (r_c)
     for c in counters.keys():
         p_c = np.full(v, alpha)
         counter = counters[c]
@@ -88,9 +97,42 @@ def compute_ratios(counters, alpha=1.0):
             p_c[dic[t]] += counter[t]
 
         # normalize (l1 norm)
-        p_c /= np.linalg.norm(p_c, ord=1)
+        p_c /= np.linalg.norm(p_c, ord=1)  # = p_c / sum(p_c)
         ratios[c] = np.log(p_c / (1 - p_c))
-        
+    """
+
+    # sum ngram counts for all classes with alpha smoothing
+    # 2* because one gets subtracted when q_c is calculate by subtracting p_c
+    sum_counts = np.full(v, 2*alpha)
+    for c in counters:
+        counter = counters[c]
+        for t in all_ngrams:
+            sum_counts[dic[t]] += counter[t]
+
+    # calculate r_c for each class
+    for c in counters:
+        counter = counters[c]
+        p_c = np.full(v, alpha)     # initialize p_c with alpha (smoothing)
+
+        # add the ngram counts
+        for t in all_ngrams:
+            p_c[dic[t]] += counter[t]
+
+        # initialize q_c
+        q_c = sum_counts - p_c
+
+        # normalize (l1 norm)
+        p_c /= np.linalg.norm(p_c, ord=1)  # = p_c / sum(p_c)
+        q_c /= np.linalg.norm(q_c, ord=1)
+
+        # p_c = log(p/|p|)
+        p_c = np.log(p_c)
+        # q_c = log(not_p/|not_p|)
+        q_c = np.log(q_c)
+
+        # Subtract log(not_p/|not_p|
+        ratios[c] = p_c - q_c
+
     return dic, ratios, v
 
 
@@ -108,7 +150,7 @@ def load_data(data_path, text_row, class_row, dic, v, ratios, grams):
     """Create Train or Test matrix and Ground Truth Array
     """
     n_samples = count_lines(data_path)
-    n_r = len(ratios)
+    # n_r = len(ratios)
     classes = ratios.keys()
     Y_real = np.zeros(n_samples, dtype=np.int64)
 
@@ -149,7 +191,7 @@ def load_data(data_path, text_row, class_row, dic, v, ratios, grams):
             indptr.append(len(indices))
 
             n += 1
-    
+
     for c in classes:
         X[c] = csr_matrix((data[c], indices, indptr), shape=(n_samples, v),
                           dtype=np.float32)
@@ -157,20 +199,37 @@ def load_data(data_path, text_row, class_row, dic, v, ratios, grams):
     return X, Y, Y_real
 
 
-def main(train, test, text_row, class_row, ngram):
+def save_counters(counters, filepath):
+    """Writes counters to files: ngram \t count \n
+    """
+    for cl in counters:
+        cpath = filepath + '.' + str(cl)
+        counter = counters[cl]
+
+        with open(cpath, 'w') as fout:
+            for ngram, count in counter.most_common():
+                count = str(count)
+                fout.write(ngram + '\t' + count + '\n')
+    sys.exit(0)
+
+
+def main(train, test, text_row, class_row, ngram, debug_counters=None):
     print('Building vocab, computing ratios')
     ngram = [int(i) for i in ngram]
     counters = build_counters(train, ngram, text_row, class_row)
+
+    if(debug_counters):
+        save_counters(counters, debug_counters)
+
     dic, ratios, v = compute_ratios(counters)
     classes = ratios.keys()
     print v
-    
+
     print('Loading Data')
-    Xs_train, Ys_train, y_train = load_data(train, text_row, 
-                                                     class_row, dic, v, 
-                                                     ratios, ngram)
-    Xs_test, Ys_test, y_true = load_data(test, text_row, class_row, 
-                                                  dic, v, ratios, ngram)
+    Xs_train, Ys_train, y_train = load_data(train, text_row, class_row,
+                                            dic, v, ratios, ngram)
+    Xs_test, Ys_test, y_true = load_data(test, text_row, class_row,
+                                         dic, v, ratios, ngram)
 
     print('Training Classifiers')
     print('classes in train: %d' % len(set(y_train)))
@@ -200,15 +259,17 @@ def main(train, test, text_row, class_row, ngram):
     print('NBSVM: %f' % (acc_svm,))
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Run NB-SVM on some text files.')
+    parser = argparse.ArgumentParser(description='Run NB-SVM.')
     parser.add_argument('--train', required=True, help='path of the train tsv')
     parser.add_argument('--test', required=True, help='path of the test tsv')
-    parser.add_argument('--text_row', required=True, 
+    parser.add_argument('--text_row', required=True,
                         type=int, help='row number of the text')
-    parser.add_argument('--class_row', required=True, 
+    parser.add_argument('--class_row', required=True,
                         type=int, help='row number of the class')
     parser.add_argument('--ngram', required=True,
                         help='N-grams considered e.g. 123 is uni+bi+tri-grams')
+    parser.add_argument('--debug-counters', required=False, default=None,
+                        help='Saves ngram counts to a file')
     args = vars(parser.parse_args())
 
     main(**args)
